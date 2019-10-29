@@ -18,7 +18,7 @@
  * Signature Pad v1.5.3
  * https://github.com/szimek/signature_pad
  *
- * Copyright 2016 Szymon Nowak
+ * Copyright 2019 Szymon Nowak
  * Released under the MIT license
  *
  * The main idea and some parts of the code (e.g. drawing variable width Bézier curve) are taken from:
@@ -329,6 +329,66 @@ var SignaturePad = (function (document) {
 
     SignaturePad.prototype._strokeWidth = function (velocity) {
         return Math.max(this.maxWidth / (velocity + 1), this.minWidth);
+    };
+
+    // Function to remove blank space around signature
+    // https://github.com/szimek/signature_pad/issues/49
+    SignaturePad.prototype.trimSignature = function () {
+        var imgWidth = this._ctx.canvas.width;
+        var imgHeight = this._ctx.canvas.height;
+        var croppedCanvas = document.createElement('canvas'),
+          croppedCtx = croppedCanvas.getContext('2d');
+        croppedCanvas.width  = imgWidth;
+        croppedCanvas.height = imgHeight;
+        croppedCtx.drawImage(this._ctx.canvas, 0, 0);
+        var imageData = this._ctx.getImageData(0, 0, imgWidth, imgHeight),
+        data = imageData.data,
+        getAlpha = function(x, y) {
+          return data[(imgWidth*y + x) * 4 + 3];
+        },
+        scanY = function (fromTop) {
+          var offset = fromTop ? 1 : -1;
+
+          // loop through each row
+          for(var y = fromTop ? 0 : imgHeight - 1; fromTop ? (y < imgHeight) : (y > -1); y += offset) {
+
+              // loop through each column
+              for(var x = 0; x < imgWidth; x++) {
+                  if (getAlpha(x, y)) {
+                      return y;
+                  }
+              }
+          }
+          return null; // all image is white
+        },
+        scanX = function (fromLeft) {
+          var offset = fromLeft? 1 : -1;
+
+          // loop through each column
+          for(var x = fromLeft ? 0 : imgWidth - 1; fromLeft ? (x < imgWidth) : (x > -1); x += offset) {
+
+              // loop through each row
+              for(var y = 0; y < imgHeight; y++) {
+                  if (getAlpha(x, y)) {
+                      return x;
+                  }
+              }
+          }
+          return null; // all image is white
+        };
+
+        var cropTop = scanY(true),
+        cropBottom = scanY(false),
+        cropLeft = scanX(true),
+        cropRight = scanX(false);
+
+        var relevantData = this._ctx.getImageData(cropLeft, cropTop, cropRight-cropLeft, cropBottom-cropTop);
+        croppedCanvas.width = cropRight-cropLeft;
+        croppedCanvas.height = cropBottom-cropTop;
+        croppedCtx.clearRect(0, 0, cropRight-cropLeft, cropBottom-cropTop);
+        croppedCtx.putImageData(relevantData, 0, 0);
+
+        return croppedCanvas.toDataURL();
     };
 
 
